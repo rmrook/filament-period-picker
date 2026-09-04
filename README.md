@@ -3,7 +3,7 @@
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/rmrook/filament-period-picker.svg?style=flat-square)](https://packagist.org/packages/rmrook/filament-period-picker)
 [![Total Downloads](https://img.shields.io/packagist/dt/rmrook/filament-period-picker.svg?style=flat-square)](https://packagist.org/packages/rmrook/filament-period-picker)
 
-A reusable Filament form field for selecting a date range. It combines quick presets, two synchronized Filament date inputs, and a shared range calendar in one responsive picker.
+A reusable Filament form field for selecting a date range. It combines quick presets, two synchronized Filament date inputs, and a shared range calendar in one responsive picker. The calendar shows two consecutive months on wide screens and one month below `1024px`.
 
 ![Filament Period Picker with quick selections, date inputs, and a two-month range calendar](docs/period-picker.png)
 
@@ -11,15 +11,15 @@ The package ships its own lazy-loaded JavaScript, CSS, views, and translations f
 
 ## What you can do
 
-- Select a start and end date from two synchronized inputs or a shared two-month calendar.
+- Select a start and end date from two synchronized inputs or the shared range calendar.
 - Use ready-made selections for years, quarters, months, and a rolling 12-month period.
 - Add your own fixed or dynamically calculated presets, such as today, this week, the last 30 days, year-to-date, a campaign period, or a booking window.
 - Restrict the selectable period with a minimum date, a maximum date, or both.
 - Choose the display format separately from the format stored in the form state.
-- Use native browser date inputs or Filament's date picker.
+- Use native browser controls or Filament's date picker for the two embedded date inputs.
 - Configure both embedded date inputs together or customize the start and end inputs separately.
 - Resolve options from closures, including the usual Filament utility injection.
-- Localize labels, month names, weekday names, and the first day of the week.
+- Localize the interface through Laravel translations, localize date and calendar names separately, and choose the first day of the week.
 - Use the same picker on desktop and mobile; the panel adapts to smaller viewports.
 
 The selection is only committed when the user clicks **Apply**. **Cancel** restores the previously applied range. While selecting an end date, the calendar previews the range and starting again with an earlier date resets the range from that date.
@@ -27,6 +27,7 @@ The selection is only committed when the user clicks **Apply**. **Cancel** resto
 ## Requirements
 
 - PHP 8.2 or newer
+- PHP `intl` extension, required by Filament
 - Laravel 11.28, 12, or 13
 - Filament 4 or 5
 
@@ -41,6 +42,7 @@ composer require rmrook/filament-period-picker
 Register the plugin in every Filament panel where the field is used:
 
 ```php
+use Filament\Panel;
 use RMRook\FilamentPeriodPicker\PeriodPickerPlugin;
 
 public function panel(Panel $panel): Panel
@@ -68,6 +70,38 @@ PeriodPicker::make('period')
         'start' => now()->startOfYear()->toDateString(),
         'end' => now()->endOfYear()->toDateString(),
     ]);
+```
+
+Always use `start` and `end` in `default()`. The value may be an array or a closure returning an array. The `draft_start` and `draft_end` keys are internal values used by the picker while its panel is open and should not be configured directly.
+
+When the field is used on a custom Filament Page, initialize the form in `mount()`. Filament does not hydrate field defaults until `fill()` is called:
+
+```php
+use Filament\Schemas\Schema;
+use RMRook\FilamentPeriodPicker\Forms\Components\PeriodPicker;
+
+/** @var array<string, mixed>|null */
+public ?array $data = [];
+
+public function mount(): void
+{
+    $this->form->fill();
+}
+
+public function form(Schema $schema): Schema
+{
+    return $schema
+        ->statePath('data')
+        ->components([
+            PeriodPicker::make('period')
+                ->label('Choose a period')
+                ->default([
+                    'start' => now()->startOfYear()->toDateString(),
+                    'end' => now()->endOfYear()->toDateString(),
+                ])
+                ->required(),
+        ]);
+}
 ```
 
 By default, the dehydrated value is an array containing ISO dates:
@@ -106,21 +140,23 @@ PeriodPicker::make('period')
 | `presets()` | Replace the quick date selections | Built-in presets |
 | `minDate()` | Earliest selectable date | No limit |
 | `maxDate()` | Latest selectable date | No limit |
-| `displayFormat()` | Format shown in both date inputs | `d M Y` |
-| `format()` | Format accepted from and returned to the form state | `Y-m-d` |
-| `locale()` | Locale used by the inputs and calendar | Application locale |
-| `firstDayOfWeek()` | First weekday, using Carbon weekday constants | Monday |
-| `native()` | Use native browser date inputs | `false` |
-| `closeOnDateSelection()` | Close an embedded date input after choosing a date | `true` |
+| `displayFormat()` | PHP date format shown in both embedded date inputs | `d M Y` |
+| `format()` | PHP date format used to hydrate and dehydrate `start` and `end` | `Y-m-d` |
+| `locale()` | Locale used for date formatting, month names, and weekday names | Application locale |
+| `firstDayOfWeek()` | First weekday as an integer or Carbon weekday constant | Monday |
+| `native()` | Use native browser controls for the embedded date inputs | `false` |
+| `closeOnDateSelection()` | Close an embedded date input's own calendar after choosing a date | `true` |
 | `configureDatePickersUsing()` | Configure both embedded `DatePicker` fields | None |
 | `configureStartDatePickerUsing()` | Configure only the start input | None |
 | `configureEndDatePickerUsing()` | Configure only the end input | None |
 
-`locale()`, `firstDayOfWeek()`, `displayFormat()`, `format()`, `native()`, `closeOnDateSelection()`, `minDate()`, `maxDate()`, and `presets()` also accept closures with Filament utility injection. Invalid preset ranges are ignored.
+`locale()`, `firstDayOfWeek()`, `displayFormat()`, `format()`, `native()`, `closeOnDateSelection()`, `minDate()`, `maxDate()`, and `presets()` also accept closures with Filament utility injection. Presets with a missing or unparseable date, or with a start after their end, are ignored.
 
-`displayFormat()` controls how both date inputs are displayed. When native inputs are enabled, the browser controls their visual format. `format()` controls the format of the hydrated and dehydrated `start` and `end` values; the picker continues to use ISO dates internally.
+`displayFormat()` controls the two date inputs inside the open panel. It does not change the collapsed field text, which is formatted by the browser's `Intl.DateTimeFormat` for the configured locale. When native inputs are enabled, the browser also controls the inputs' visual format.
 
-For any other `DatePicker` option, configure both embedded inputs together or target one input:
+`format()` controls the hydrated and dehydrated `start` and `end` values. The picker continues to use ISO `Y-m-d` dates internally. `firstDayOfWeek()` accepts `0` through `7`, following Filament's `DatePicker`; use Carbon weekday constants for clarity. Both `0` and `7` render Sunday as the first day.
+
+Use the configurator methods for presentation options that belong to the embedded inputs, such as labels, placeholders, and extra input attributes:
 
 ```php
 use Filament\Forms\Components\DatePicker;
@@ -141,6 +177,8 @@ PeriodPicker::make('period')
 
 The configurator closures may also inject the parent `PeriodPicker` as `$component`, the current picker type as `$type` (`start` or `end`), and the usual Filament utilities. The embedded fields always remain non-dehydrated because the parent field owns the final range value.
 
+Options applied only through these callbacks do not automatically affect the shared range calendar. For example, `disabledDates()` would disable dates in an embedded input but not in the shared calendar. Configure shared behavior with the parent methods such as `minDate()`, `maxDate()`, `locale()`, and `firstDayOfWeek()`. Do not change an embedded field's state path, dehydration, or value format; those are managed by `PeriodPicker`.
+
 Without custom presets, the picker provides:
 
 - This year and last year
@@ -148,12 +186,16 @@ Without custom presets, the picker provides:
 - This month and last month
 - Last 12 months
 
-Calling `presets()` replaces these defaults. Pass an empty array when you want to show only the custom calendar and date inputs:
+These ranges are calculated server-side using `config('app.user_timezone')` when it is set, falling back to `config('app.timezone')`.
+
+Calling `presets()` replaces these defaults. Pass an empty array to remove all quick-selection buttons:
 
 ```php
 PeriodPicker::make('period')
     ->presets([]);
 ```
+
+A preset adds a quick-selection button; it does not automatically become the field's initial value. Use `default()` with `start` and `end` when a range should already be selected when the form opens.
 
 ## Date selection recipes
 
@@ -218,7 +260,9 @@ PeriodPicker::make('period')
     });
 ```
 
-Each preset needs a unique `key`, a visible `label`, and valid `start` and `end` dates. The start date must not be after the end date.
+Each preset requires valid `start` and `end` dates, and the start must not be after the end. Supply a unique `key` and a visible `label` for predictable rendering. When omitted, the key is generated from the two dates and the label becomes an empty string.
+
+Preset ranges are not filtered against `minDate()` or `maxDate()`. If a preset falls outside those limits, it can be selected but cannot be applied. Keep custom presets within the configured bounds.
 
 ### Keep the defaults and add more presets
 
@@ -330,12 +374,23 @@ PeriodPicker::make('period')
 
 ## Working with the selected value
 
-The field returns `null` until it has a valid start and end date. Once complete, read the two dates from the field state:
+The field dehydrates to `null` until it has a valid start and end date. Once complete, read the two dates from the form's dehydrated state:
 
 ```php
-$start = $data['period']['start'];
-$end = $data['period']['end'];
+$period = $this->form->getState()['period'];
+
+$start = $period['start'];
+$end = $period['end'];
 ```
+
+### Applied values and draft values
+
+The picker keeps two versions of the range while the panel is open:
+
+- `start` and `end` are the applied values. These are returned by `$this->form->getState()` in the configured `format()` and are the only values you should save.
+- `draft_start` and `draft_end` temporarily synchronize the two embedded date inputs with the calendar. Clicking **Apply** copies the draft range to `start` and `end`; clicking **Cancel** discards it.
+
+The raw Livewire property may contain all four keys while the form is being edited, and a parent `afterStateUpdated()` hook may therefore receive draft keys. Draft values are implementation details: do not include them in `default()`, database columns, casts, or persistence logic. Use the dehydrated result of `$this->form->getState()` when submitting or saving the range.
 
 When the range is stored directly in one Eloquent attribute, use a JSON column and cast it to an array:
 
@@ -350,7 +405,9 @@ protected function casts(): array
 
 ## Translations
 
-The picker follows the Laravel application locale and includes English (`en`), Dutch (`nl`), French (`fr`), Italian (`it`), German (`de`), Spanish (`es`), Greek (`el`), and Japanese (`ja`). To customize its copy, publish the package translations:
+The interface copy follows the Laravel application locale and includes English (`en`), Dutch (`nl`), French (`fr`), Italian (`it`), German (`de`), Spanish (`es`), Greek (`el`), and Japanese (`ja`). The field's `locale()` option controls date formatting, month names, and weekday names; it does not switch the translated interface copy or automatically change the first day of the week.
+
+To customize the interface copy, publish the package translations:
 
 ```bash
 php artisan vendor:publish --tag=filament-period-picker-translations
@@ -360,6 +417,13 @@ php artisan vendor:publish --tag=filament-period-picker-translations
 
 ```bash
 composer test
+```
+
+Check or apply PHP formatting with:
+
+```bash
+composer format -- --test
+composer format
 ```
 
 ## License

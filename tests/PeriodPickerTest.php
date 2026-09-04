@@ -141,6 +141,12 @@ final class PeriodPickerTest extends TestCase
             'start' => '2026-09-01',
             'end' => '2026-09-30',
         ], $hydratedDrafts);
+        $this->assertSame([
+            'period' => [
+                'start' => '2026-09-01',
+                'end' => '2026-09-30',
+            ],
+        ], $schema->getState());
     }
 
     public function test_it_allows_both_date_pickers_to_be_further_configured(): void
