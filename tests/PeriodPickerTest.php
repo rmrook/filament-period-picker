@@ -6,7 +6,11 @@ namespace RMRook\FilamentPeriodPicker\Tests;
 
 use Carbon\CarbonImmutable;
 use Filament\Forms\Components\DatePicker;
+use Filament\Schemas\Concerns\InteractsWithSchemas;
+use Filament\Schemas\Contracts\HasSchemas;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Arr;
+use Livewire\Component;
 use ReflectionMethod;
 use RMRook\FilamentPeriodPicker\Forms\Components\PeriodPicker;
 use RMRook\FilamentPeriodPicker\PeriodPickerPlugin;
@@ -97,6 +101,46 @@ final class PeriodPickerTest extends TestCase
             ['start' => '03/09/2026', 'end' => '30/09/2026'],
             $formatStateForDehydration->invoke($component, ['start' => '2026-09-03', 'end' => '2026-09-30']),
         );
+    }
+
+    public function test_it_hydrates_a_default_range_into_the_embedded_date_pickers(): void
+    {
+        $hydratedDrafts = [];
+        $livewire = new class extends Component implements HasSchemas
+        {
+            use InteractsWithSchemas;
+
+            /** @var array<string, mixed> */
+            public array $data = [];
+        };
+
+        $schema = Schema::make($livewire)
+            ->statePath('data')
+            ->components([
+                PeriodPicker::make('period')
+                    ->default(fn (): array => [
+                        'start' => '2026-09-01',
+                        'end' => '2026-09-30',
+                    ])
+                    ->configureDatePickersUsing(function (DatePicker $datePicker, string $type) use (&$hydratedDrafts): void {
+                        $datePicker->afterStateHydrated(function (mixed $state) use (&$hydratedDrafts, $type): void {
+                            $hydratedDrafts[$type] = $state;
+                        });
+                    }),
+            ]);
+
+        $schema->fill();
+
+        $this->assertSame([
+            'start' => '2026-09-01',
+            'end' => '2026-09-30',
+            'draft_start' => '2026-09-01',
+            'draft_end' => '2026-09-30',
+        ], $livewire->data['period']);
+        $this->assertSame([
+            'start' => '2026-09-01',
+            'end' => '2026-09-30',
+        ], $hydratedDrafts);
     }
 
     public function test_it_allows_both_date_pickers_to_be_further_configured(): void

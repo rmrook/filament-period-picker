@@ -116,6 +116,13 @@ class PeriodPicker extends Field
         return $this;
     }
 
+    public function default(mixed $state): static
+    {
+        parent::default(fn (): ?array => $this->normalizeStateWithDraft($this->evaluate($state)));
+
+        return $this;
+    }
+
     public function displayFormat(string|Closure|null $format): static
     {
         $this->displayFormat = $format;
