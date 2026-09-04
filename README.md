@@ -1,5 +1,8 @@
 # Filament Period Picker
 
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/rmrook/filament-period-picker.svg?style=flat-square)](https://packagist.org/packages/rmrook/filament-period-picker)
+[![Total Downloads](https://img.shields.io/packagist/dt/rmrook/filament-period-picker.svg?style=flat-square)](https://packagist.org/packages/rmrook/filament-period-picker)
+
 A reusable Filament form field for selecting a date range. It combines quick presets, two synchronized Filament date inputs, and a shared range calendar in one responsive picker.
 
 The package ships its own lazy-loaded JavaScript, CSS, views, and translations for English, Dutch, French, Italian, German, Spanish, Greek, and Japanese. A consuming application does not need to add Tailwind `@source` directives or register assets manually.
